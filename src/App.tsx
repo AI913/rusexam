@@ -181,7 +181,7 @@ function MultipleChoice({
             checked={userAnswer === option}
             onChange={() => onAnswerChange(questionId, option)}
           />
-          {option}
+          <span dangerouslySetInnerHTML={{ __html: option }} />
         </label>
       ))}
     </div>
