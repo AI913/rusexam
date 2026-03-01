@@ -1,7 +1,5 @@
 import { useState } from "react";
 import { quizSections, type Section, type Question } from "./data/quizData";
-import reactLogo from "./assets/react.svg";
-import viteLogo from "/vite.svg";
 import "./App.css";
 
 interface UserAnswer {
@@ -58,10 +56,12 @@ function App() {
       section.questions.forEach((q) => {
         totalQuestions++;
         const userAns = quizState.userAnswers[q.id];
-        const isCorrect = Array.isArray(q.correctAnswer)
-          ? q.correctAnswer.includes(userAns) // For multi, adjust if needed
-          : userAns?.toLowerCase().trim() ===
-            q.correctAnswer.toLowerCase().trim(); // Case-insensitive for fillBlank
+        const isCorrect = q.type === "multiple"
+          ? userAns === getCorrectOptionNumber(q)
+          : Array.isArray(q.correctAnswer)
+            ? q.correctAnswer.includes(userAns)
+            : userAns?.toLowerCase().trim() ===
+              q.correctAnswer.toLowerCase().trim();
         if (isCorrect) totalCorrect++;
       });
     });
@@ -172,20 +172,45 @@ function MultipleChoice({
 }) {
   return (
     <div className="multiple-choice">
-      {options.map((option) => (
-        <label key={option} className={userAnswer === option ? "selected" : ""}>
-          <input
-            type="radio"
-            name={questionId}
-            value={option}
-            checked={userAnswer === option}
-            onChange={() => onAnswerChange(questionId, option)}
-          />
-          <span dangerouslySetInnerHTML={{ __html: option }} />
-        </label>
-      ))}
+      {options.map((option, index) => {
+        const optionNumber = String(index + 1);
+        const isSelected = userAnswer === optionNumber;
+        return (
+          <label key={`${questionId}-${optionNumber}`} className={isSelected ? "selected" : ""}>
+            <input
+              type="radio"
+              name={questionId}
+              value={optionNumber}
+              checked={isSelected}
+              onChange={() => onAnswerChange(questionId, optionNumber)}
+            />
+            <span>{optionNumber}. </span>
+            <span dangerouslySetInnerHTML={{ __html: option }} />
+          </label>
+        );
+      })}
     </div>
   );
+}
+
+function getCorrectOptionNumber(question: Question): string | undefined {
+  if (question.type !== "multiple" || !question.options || Array.isArray(question.correctAnswer)) {
+    return undefined;
+  }
+
+  const numericAnswer = question.correctAnswer.trim();
+  if (/^\d+$/.test(numericAnswer)) {
+    const optionNumber = Number(numericAnswer);
+    if (optionNumber >= 1 && optionNumber <= question.options.length) {
+      return String(optionNumber);
+    }
+  }
+
+  const correctIndex = question.options.findIndex(
+    (option) => option.trim() === question.correctAnswer.trim(),
+  );
+
+  return correctIndex >= 0 ? String(correctIndex + 1) : undefined;
 }
 
 // Fill in the Blank Component
