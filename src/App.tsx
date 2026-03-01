@@ -3,7 +3,7 @@ import { quizSections, type Section, type Question } from "./data/quizData";
 import "./App.css";
 
 interface UserAnswer {
-  [questionId: string]: string; // Simple string for both types (comma-sep for multi if needed)
+  [questionId: string]: string;
 }
 
 interface QuizState {
@@ -11,6 +11,16 @@ interface QuizState {
   userAnswers: UserAnswer;
   isSubmitted: boolean;
   score: number;
+}
+
+interface QuestionReview {
+  questionId: string;
+  questionNumber: number;
+  sectionTitle: string;
+  questionText: string;
+  isCorrect: boolean;
+  userAnswerLabel: string;
+  correctAnswerLabel: string;
 }
 
 function App() {
@@ -56,12 +66,7 @@ function App() {
       section.questions.forEach((q) => {
         totalQuestions++;
         const userAns = quizState.userAnswers[q.id];
-        const isCorrect = q.type === "multiple"
-          ? userAns === getCorrectOptionNumber(q)
-          : Array.isArray(q.correctAnswer)
-            ? q.correctAnswer.includes(userAns)
-            : userAns?.toLowerCase().trim() ===
-              q.correctAnswer.toLowerCase().trim();
+        const isCorrect = isAnswerCorrect(q, userAns);
         if (isCorrect) totalCorrect++;
       });
     });
@@ -73,12 +78,55 @@ function App() {
     }));
   };
 
+  const questionReviews = buildQuestionReviews(quizState.userAnswers);
+  const totalCorrect = questionReviews.filter((review) => review.isCorrect).length;
+
   if (quizState.isSubmitted) {
     return (
       <div className="quiz-results">
-        <h1>Test Complete!</h1>
-        <p>Your score: {quizState.score.toFixed(0)}%</p>
-        <button onClick={() => window.location.reload()}>Restart</button>
+        <div className="results-header">
+          <h1>Test Complete</h1>
+          <p className="results-score">Score: {quizState.score.toFixed(0)}%</p>
+          <p className="results-summary">
+            {totalCorrect} / {questionReviews.length} correct
+          </p>
+          <button className="restart-btn" onClick={() => window.location.reload()}>
+            Restart
+          </button>
+        </div>
+
+        <div className="results-list">
+          {questionReviews.map((review) => (
+            <article
+              key={review.questionId}
+              className={`result-card ${review.isCorrect ? "correct" : "incorrect"}`}
+            >
+              <div className="result-top">
+                <p className="result-index">
+                  Q{review.questionNumber} · {review.sectionTitle}
+                </p>
+                <span className={`result-status ${review.isCorrect ? "good" : "bad"}`}>
+                  {review.isCorrect ? "Correct" : "Incorrect"}
+                </span>
+              </div>
+              <p className="result-question">{review.questionText}</p>
+              <div className="answer-row your-answer">
+                <span className="answer-label">Your answer:</span>
+                <span
+                  className="answer-value"
+                  dangerouslySetInnerHTML={{ __html: review.userAnswerLabel }}
+                />
+              </div>
+              <div className="answer-row correct-answer">
+                <span className="answer-label">Correct answer:</span>
+                <span
+                  className="answer-value"
+                  dangerouslySetInnerHTML={{ __html: review.correctAnswerLabel }}
+                />
+              </div>
+            </article>
+          ))}
+        </div>
       </div>
     );
   }
@@ -86,7 +134,7 @@ function App() {
   return (
     <div className="App">
       <h1>TORFL Practice Quiz</h1>
-      <Section
+      <QuizSection
         section={currentSection}
         userAnswers={quizState.userAnswers}
         onAnswerChange={handleAnswerChange}
@@ -102,8 +150,74 @@ function App() {
   );
 }
 
-// Sub-Component: Renders a single section's questions
-function Section({
+function isAnswerCorrect(question: Question, userAnswer: string): boolean {
+  if (!userAnswer?.trim()) return false;
+
+  if (question.type === "multiple") {
+    return userAnswer === getCorrectOptionNumber(question);
+  }
+
+  if (Array.isArray(question.correctAnswer)) {
+    return question.correctAnswer.some(
+      (answer) => answer.toLowerCase().trim() === userAnswer.toLowerCase().trim(),
+    );
+  }
+
+  return userAnswer.toLowerCase().trim() === question.correctAnswer.toLowerCase().trim();
+}
+
+function formatAnswer(question: Question, value: string | undefined): string {
+  if (!value?.trim()) {
+    return "<em>No answer</em>";
+  }
+
+  if (question.type === "multiple") {
+    const answerNumber = value.trim();
+    if (/^\d+$/.test(answerNumber) && question.options) {
+      const option = question.options[Number(answerNumber) - 1];
+      if (option) {
+        return `${answerNumber}. ${option}`;
+      }
+    }
+  }
+
+  return value;
+}
+
+function getCorrectAnswerText(question: Question): string {
+  if (question.type === "multiple") {
+    const optionNumber = getCorrectOptionNumber(question);
+    if (!optionNumber) return "<em>Unavailable</em>";
+    return formatAnswer(question, optionNumber);
+  }
+
+  if (Array.isArray(question.correctAnswer)) {
+    return question.correctAnswer.join(" / ");
+  }
+
+  return question.correctAnswer;
+}
+
+function buildQuestionReviews(userAnswers: UserAnswer): QuestionReview[] {
+  let questionNumber = 0;
+  return quizSections.flatMap((section) =>
+    section.questions.map((question) => {
+      questionNumber++;
+      const userAnswer = userAnswers[question.id];
+      return {
+        questionId: question.id,
+        questionNumber,
+        sectionTitle: section.title,
+        questionText: question.question.trim() || "Choose the correct option.",
+        isCorrect: isAnswerCorrect(question, userAnswer),
+        userAnswerLabel: formatAnswer(question, userAnswer),
+        correctAnswerLabel: getCorrectAnswerText(question),
+      };
+    }),
+  );
+}
+
+function QuizSection({
   section,
   userAnswers,
   onAnswerChange,
@@ -127,7 +241,6 @@ function Section({
   );
 }
 
-// Sub-Component: Single question renderer
 function Question({
   question,
   userAnswer,
@@ -158,7 +271,6 @@ function Question({
   );
 }
 
-// Multiple Choice Component
 function MultipleChoice({
   options,
   userAnswer,
@@ -213,7 +325,6 @@ function getCorrectOptionNumber(question: Question): string | undefined {
   return correctIndex >= 0 ? String(correctIndex + 1) : undefined;
 }
 
-// Fill in the Blank Component
 function FillBlank({
   userAnswer,
   onAnswerChange,
